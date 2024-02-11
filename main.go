@@ -12,8 +12,8 @@ import (
 var db = make(map[string]string)
 
 const MySecret string = "abc&1*~#^2^#s0^=)^^7%b34"
-var bytes = []byte{35, 46, 57, 24, 85, 35, 24, 74, 87, 35, 88, 98, 66, 32, 14, 05}
 
+var bytes = []byte{35, 46, 57, 24, 85, 35, 24, 74, 87, 35, 88, 98, 66, 32, 14, 05}
 
 func setupRouter() *gin.Engine {
 	// Disable Console Color
@@ -44,10 +44,9 @@ func setupRouter() *gin.Engine {
 		requestId := tokenizeRequest.Id
 		// requestData := tokenizeRequest.Data
 
-
-
 		c.JSON(http.StatusOK, gin.H{
-			"id": encrypt(requestId, MySecret),
+			"encrypt": encrypt(requestId, MySecret),
+			"decrypt": decrypt(encrypt(requestId, MySecret), MySecret),
 		})
 
 	})
@@ -67,25 +66,44 @@ func main() {
 
 func Encode(b []byte) string {
 	return base64.StdEncoding.EncodeToString(b)
-   }
-   
-   
+}
 
-func encrypt(data string, key string) string {
+func Decode(s string) []byte{
+	data, err := base64.StdEncoding.DecodeString(s)
+	if err != nil {
+		panic(err)
+	}
+	return data
+}
+
+func encrypt(unEncryptedData string, key string) string {
 	block, err := aes.NewCipher([]byte(key))
 
 	if err != nil {
 		panic(err)
 	}
 
-	plaintext := []byte(data)
-	cfb := cipher.NewCFBDecrypter(block, bytes)
+	// convert string to bytes
+	plaintext := []byte(unEncryptedData)
+	cfb := cipher.NewCFBEncrypter(block, bytes)
 	cipherText := make([]byte, len(plaintext))
 	cfb.XORKeyStream(cipherText, plaintext)
 
 	return Encode(cipherText)
 }
 
-func decrypt(data string, key string) string {
-	return "string"
+func decrypt(encryptedData string, key string) string {
+	block, err := aes.NewCipher([]byte(key))
+
+	if err != nil {
+		panic(err)
+	}
+
+	// convert string to bytes
+	cipherText := Decode(encryptedData)
+	cfb := cipher.NewCFBDecrypter(block, bytes)
+	plainText := make([]byte, len(cipherText))
+	cfb.XORKeyStream(plainText, cipherText)
+
+	return string(plainText)
 }
