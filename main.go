@@ -1,19 +1,13 @@
 package main
 
 import (
-	"crypto/aes"
-	"crypto/cipher"
-	"encoding/base64"
+	"log"
 	"net/http"
 
+	"github.com/claranceliberi/data-privacy-vault/db"
+	"github.com/claranceliberi/data-privacy-vault/utils"
 	"github.com/gin-gonic/gin"
 )
-
-var db = make(map[string]string)
-
-const MySecret string = "abc&1*~#^2^#s0^=)^^7%b34"
-
-var bytes = []byte{35, 46, 57, 24, 85, 35, 24, 74, 87, 35, 88, 98, 66, 32, 14, 05}
 
 func setupRouter() *gin.Engine {
 	// Disable Console Color
@@ -44,8 +38,17 @@ func setupRouter() *gin.Engine {
 		encrypted := make(map[string]string)
 
 		for key, value := range tokenizeRequest.Data {
-			token := encrypt(value, MySecret)
-			db[token] = "token"
+			encryptedValue := utils.Encrypt(value, utils.MySecret)
+			// generate unique token for data
+			token := utils.Tokenize(value)
+
+			// store token in redis with data encrypted
+			err := db.Client.Set(token, encryptedValue, 0).Err()
+
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			}
+
 			encrypted[key] = token
 		}
 
@@ -67,9 +70,10 @@ func setupRouter() *gin.Engine {
 		for key, value := range detokenizeRequest.Data {
 			solution := make(map[string]interface{})
 
-			if _, ok := db[value]; ok {
+			if val := db.Client.Get(value); val.Err() == nil {
 				solution["found"] = true
-				solution["value"] = decrypt(value, MySecret)
+				log.Println(val.Val())
+				solution["value"] = utils.Decrypt(val.Val(), utils.MySecret)
 			} else {
 				solution["found"] = false
 				solution["value"] = ""
@@ -86,51 +90,10 @@ func setupRouter() *gin.Engine {
 }
 
 func main() {
+	// initialize db
+	db.Init()
+
 	r := setupRouter()
 	// Listen and Server in 0.0.0.0:8080
 	r.Run(":8080")
-}
-
-func Encode(b []byte) string {
-	return base64.StdEncoding.EncodeToString(b)
-}
-
-func Decode(s string) []byte {
-	data, err := base64.StdEncoding.DecodeString(s)
-	if err != nil {
-		panic(err)
-	}
-	return data
-}
-
-func encrypt(unEncryptedData string, key string) string {
-	block, err := aes.NewCipher([]byte(key))
-
-	if err != nil {
-		panic(err)
-	}
-
-	// convert string to bytes
-	plaintext := []byte(unEncryptedData)
-	cfb := cipher.NewCFBEncrypter(block, bytes)
-	cipherText := make([]byte, len(plaintext))
-	cfb.XORKeyStream(cipherText, plaintext)
-
-	return Encode(cipherText)
-}
-
-func decrypt(encryptedData string, key string) string {
-	block, err := aes.NewCipher([]byte(key))
-
-	if err != nil {
-		panic(err)
-	}
-
-	// convert string to bytes
-	cipherText := Decode(encryptedData)
-	cfb := cipher.NewCFBDecrypter(block, bytes)
-	plainText := make([]byte, len(cipherText))
-	cfb.XORKeyStream(plainText, cipherText)
-
-	return string(plainText)
 }

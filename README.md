@@ -76,3 +76,12 @@ Response:
 		}
 	}
 ```
+
+## Step 2
+In this step my goal was to store the data in a persistent store. All data were stored encrypted. I used Redis for this. I used `sha1` hashing algorithm to generate a unique token for sensitive data. for now `sha1` is not secure enough to be used in production. but for my case it was enough.
+
+Sensitive information are stored in Redis with the token as the key and the senstive data as the value. the sensitive data are encrypted using `AES` algorithm.
+
+### Development
+
+This project is build using golang
