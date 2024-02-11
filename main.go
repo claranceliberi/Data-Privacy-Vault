@@ -41,21 +41,48 @@ func setupRouter() *gin.Engine {
 			return
 		}
 
-		requestId := tokenizeRequest.Id
-		// requestData := tokenizeRequest.Data
+		encrypted := make(map[string]string)
 
-		c.JSON(http.StatusOK, gin.H{
-			"encrypt": encrypt(requestId, MySecret),
-			"decrypt": decrypt(encrypt(requestId, MySecret), MySecret),
-		})
+		for key, value := range tokenizeRequest.Data {
+			token := encrypt(value, MySecret)
+			db[token] = "token"
+			encrypted[key] = token
+		}
+
+		c.JSON(http.StatusOK, gin.H{"id": tokenizeRequest.Id, "data": encrypted})
 
 	})
 
 	r.POST("/detokenize", func(c *gin.Context) {
 
+		var detokenizeRequest TokenizeRequest
+
+		if err := c.ShouldBindJSON(&detokenizeRequest); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+
+		decrypted := make(map[string]map[string]interface{})
+
+		for key, value := range detokenizeRequest.Data {
+			solution := make(map[string]interface{})
+
+			if _, ok := db[value]; ok {
+				solution["found"] = true
+				solution["value"] = decrypt(value, MySecret)
+			} else {
+				solution["found"] = false
+				solution["value"] = ""
+			}
+
+			decrypted[key] = solution
+		}
+		c.JSON(http.StatusOK, gin.H{"id": detokenizeRequest.Id, "data": decrypted})
+
 	})
 
 	return r
+
 }
 
 func main() {
@@ -68,7 +95,7 @@ func Encode(b []byte) string {
 	return base64.StdEncoding.EncodeToString(b)
 }
 
-func Decode(s string) []byte{
+func Decode(s string) []byte {
 	data, err := base64.StdEncoding.DecodeString(s)
 	if err != nil {
 		panic(err)
